@@ -667,6 +667,7 @@ struct MediaInfoView: View {
                 videoPlayerViewController.fullUrl = fullURL
                 videoPlayerViewController.episodeNumber = selectedEpisodeNumber
                 videoPlayerViewController.episodeImageUrl = selectedEpisodeImage
+                videoPlayerViewController.topLevelImageUrl = imageUrl
                 videoPlayerViewController.mediaTitle = title
                 videoPlayerViewController.subtitles = subtitles ?? ""
                 videoPlayerViewController.modalPresentationStyle = .fullScreen
@@ -694,7 +695,8 @@ struct MediaInfoView: View {
                         selectNextEpisode()
                     },
                     subtitlesURL: subtitles,
-                    episodeImageUrl: selectedEpisodeImage
+                    episodeImageUrl: selectedEpisodeImage,
+                    topLevelImageUrl: imageUrl
                 )
                 customMediaPlayer.modalPresentationStyle = .fullScreen
                 Logger.shared.log("Opening custom media player with url: \(url)")

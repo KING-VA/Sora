@@ -259,6 +259,7 @@ struct ContinueWatchingCell: View {
                 videoPlayerViewController.streamUrl = item.streamUrl
                 videoPlayerViewController.fullUrl = item.fullUrl
                 videoPlayerViewController.episodeImageUrl = item.imageUrl
+                videoPlayerViewController.topLevelImageUrl = item.topLevelImageUrl ?? ""
                 videoPlayerViewController.episodeNumber = item.episodeNumber
                 videoPlayerViewController.mediaTitle = item.mediaTitle
                 videoPlayerViewController.subtitles = item.subtitles ?? ""
@@ -277,7 +278,8 @@ struct ContinueWatchingCell: View {
                     episodeNumber: item.episodeNumber,
                     onWatchNext: { },
                     subtitlesURL: item.subtitles,
-                    episodeImageUrl: item.imageUrl
+                    episodeImageUrl: item.imageUrl,
+                    topLevelImageUrl: item.topLevelImageUrl ?? nil
                 )
                 customMediaPlayer.modalPresentationStyle = .fullScreen
                 
@@ -289,7 +291,7 @@ struct ContinueWatchingCell: View {
         }) {
             VStack(alignment: .leading) {
                 ZStack {
-                    KFImage(URL(string: item.imageUrl.isEmpty ? "https://raw.githubusercontent.com/cranci1/Sora/refs/heads/main/assets/banner2.png" : item.imageUrl))
+                    KFImage(item.displayImageTypeURL)
                         .placeholder {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(Color.gray.opacity(0.3))

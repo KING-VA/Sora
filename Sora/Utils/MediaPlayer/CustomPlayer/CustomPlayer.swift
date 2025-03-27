@@ -10,6 +10,11 @@ import AVKit
 import SwiftUI
 import AVFoundation
 
+enum SeekDirection {
+    case forward
+    case backward
+}
+
 class SliderViewModel: ObservableObject {
     @Published var sliderValue: Double = 0.0
 }
@@ -21,6 +26,7 @@ class CustomMediaPlayerViewController: UIViewController {
     let titleText: String
     let episodeNumber: Int
     let episodeImageUrl: String
+    let topLevelImageUrl: String?
     let subtitlesURL: String?
     let onWatchNext: () -> Void
     
@@ -56,6 +62,9 @@ class CustomMediaPlayerViewController: UIViewController {
     
     var playerViewController: AVPlayerViewController!
     var controlsContainerView: UIView!
+    private var seekTimer: Timer?
+    private var lastUpdateTime: Double = 0
+    private var isSeeking = false
     #if !os(tvOS)
     var playPauseButton: UIImageView!
     var backwardButton: UIImageView!
@@ -108,7 +117,8 @@ class CustomMediaPlayerViewController: UIViewController {
          episodeNumber: Int,
          onWatchNext: @escaping () -> Void,
          subtitlesURL: String?,
-         episodeImageUrl: String) {
+         episodeImageUrl: String,
+         topLevelImageUrl: String?) {
         
         self.module = module
         self.streamURL = urlString
@@ -118,6 +128,7 @@ class CustomMediaPlayerViewController: UIViewController {
         self.episodeImageUrl = episodeImageUrl
         self.onWatchNext = onWatchNext
         self.subtitlesURL = subtitlesURL
+        self.topLevelImageUrl = topLevelImageUrl
         
         super.init(nibName: nil, bundle: nil)
         
@@ -147,7 +158,7 @@ class CustomMediaPlayerViewController: UIViewController {
         // Create a playpause button detector to toggle play/pause
         playPauseTap = UITapGestureRecognizer(target: self, action: #selector(togglePlayPause))
         playPauseTap.allowedPressTypes = [NSNumber(value: UIPress.PressType.playPause.rawValue)]
-        playPauseTap.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirect.rawValue), NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)]
+        playPauseTap.cancelsTouchesInView = false
         view.addGestureRecognizer(playPauseTap)
         
         // Create forward and backwards press types
@@ -282,6 +293,7 @@ class CustomMediaPlayerViewController: UIViewController {
             let item = ContinueWatchingItem(
                 id: UUID(),
                 imageUrl: episodeImageUrl,
+                topLevelImageUrl: topLevelImageUrl,
                 episodeNumber: episodeNumber,
                 mediaTitle: titleText,
                 progress: progress,
@@ -503,10 +515,11 @@ class CustomMediaPlayerViewController: UIViewController {
             fillColor: .white.opacity(0.5),
             emptyColor: .white.opacity(0.3),
             height: 30,
-            onEditingChanged: { editing in
+            onEditingChanged: { [weak self] editing in
+                guard let self = self else { return }
                 self.isSliderEditing = editing
                 if !editing {
-                    self.player.seek(to: CMTime(seconds: self.sliderViewModel.sliderValue, preferredTimescale: 600))
+                    self.seekTo(time: self.sliderViewModel.sliderValue)
                 }
             }
         )
@@ -924,7 +937,7 @@ class CustomMediaPlayerViewController: UIViewController {
     }
     
     func addTimeObserver() {
-        let interval = CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        let interval = CMTime(seconds: 0.5, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self,
                   let currentItem = self.player.currentItem,
@@ -1071,6 +1084,9 @@ class CustomMediaPlayerViewController: UIViewController {
                         self.watchNextButton.alpha = 0.8
                     })
                 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    self.toggleControls()
+                }
                 self.setNeedsFocusUpdate()
             } else {
                 // When controls are hidden:
@@ -1085,97 +1101,176 @@ class CustomMediaPlayerViewController: UIViewController {
                         self.watchNextButton.isHidden = true
                     })
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    self.toggleControls()
-                }
             }
             self.updateFocusIfNeeded()
             self.view.layoutIfNeeded()
         })
-        self.view.addGestureRecognizer(self.playPauseTap)
-        Logger.shared.log("Current Gestures: \(String(describing: view.gestureRecognizers))")
+        view.isUserInteractionEnabled = true
+//        self.view.addGestureRecognizer(self.playPauseTap)
     }
     
-    @objc func seekBackwardLongPress(_ gesture: UILongPressGestureRecognizer) {
-        // TODO: Need to update slider internals or redo this
-        if gesture.state == .began {
-            isSliderEditing = true
-            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                self.controlsContainerView.alpha = 1.0
-            })
-            let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
-            let finalSkip = holdValue > 0 ? holdValue : 30
-            currentTimeVal = max(currentTimeVal - finalSkip, 0)
-            sliderViewModel.sliderValue = currentTimeVal
-            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-                self.currentTimeVal = max(self.currentTimeVal - finalSkip, 0)
-                self.sliderViewModel.sliderValue = self.currentTimeVal
-                if gesture.state == .possible {
-                    self.isSliderEditing = false
-                    self.player.seek(to: CMTime(seconds: self.currentTimeVal, preferredTimescale: 600))
-                    UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                        self.controlsContainerView.alpha = 0.0
-                    })
-                    timer.invalidate()
-                }
-            }
-        }
-    }
+//    @objc func seekBackwardLongPress(_ gesture: UILongPressGestureRecognizer) {
+//        // TODO: Need to update slider internals or redo this
+//        if gesture.state == .began {
+//            isSliderEditing = true
+//            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//                self.controlsContainerView.alpha = 1.0
+//            })
+//            let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
+//            let finalSkip = holdValue > 0 ? holdValue : 30
+//            currentTimeVal = max(currentTimeVal - finalSkip, 0)
+//            sliderViewModel.sliderValue = currentTimeVal
+//            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+//                self.currentTimeVal = max(self.currentTimeVal - finalSkip, 0)
+//                self.sliderViewModel.sliderValue = self.currentTimeVal
+//                if gesture.state == .possible {
+//                    self.isSliderEditing = false
+//                    self.player.seek(to: CMTime(seconds: self.currentTimeVal, preferredTimescale: 600))
+//                    UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//                        self.controlsContainerView.alpha = 0.0
+//                    })
+//                    timer.invalidate()
+//                }
+//            }
+//        }
+//    }
+//    
+//    @objc func seekForwardLongPress(_ gesture: UILongPressGestureRecognizer) {
+//        if gesture.state == .began {
+//            isSliderEditing = true
+//            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//                self.controlsContainerView.alpha = 1.0
+//            })
+//            let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
+//            let finalSkip = holdValue > 0 ? holdValue : 30
+//            currentTimeVal = min(currentTimeVal + finalSkip, duration)
+//            sliderViewModel.sliderValue = currentTimeVal
+//            Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { timer in
+//                self.currentTimeVal = min(self.currentTimeVal + finalSkip, self.duration)
+//                self.sliderViewModel.sliderValue = self.currentTimeVal
+//                if gesture.state == .possible {
+//                    self.isSliderEditing = false
+//                    self.player.seek(to: CMTime(seconds: self.currentTimeVal, preferredTimescale: 600))
+//                    UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//                        self.controlsContainerView.alpha = 0.0
+//                    })
+//                    timer.invalidate()
+//                }
+//            }
+//        }
+//    }
     
     @objc func seekForwardLongPress(_ gesture: UILongPressGestureRecognizer) {
-        if gesture.state == .began {
-            isSliderEditing = true
-            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                self.controlsContainerView.alpha = 1.0
-            })
-            let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
-            let finalSkip = holdValue > 0 ? holdValue : 30
-            currentTimeVal = min(currentTimeVal + finalSkip, duration)
-            sliderViewModel.sliderValue = currentTimeVal
-            Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { timer in
-                self.currentTimeVal = min(self.currentTimeVal + finalSkip, self.duration)
-                self.sliderViewModel.sliderValue = self.currentTimeVal
-                if gesture.state == .possible {
-                    self.isSliderEditing = false
-                    self.player.seek(to: CMTime(seconds: self.currentTimeVal, preferredTimescale: 600))
-                    UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                        self.controlsContainerView.alpha = 0.0
-                    })
-                    timer.invalidate()
-                }
-            }
-        }
+        guard !isControlsVisible else { return }
+        handleLongPressSeek(gesture: gesture, direction: .forward)
     }
-    
-    @objc func seekBackward() {
-        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-            self.controlsContainerView.alpha = 1.0
-        })
-        let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
-        let finalSkip = skipValue > 0 ? skipValue : 10
-        currentTimeVal = max(currentTimeVal - finalSkip, 0)
-        player.seek(to: CMTime(seconds: currentTimeVal, preferredTimescale: 600))
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                self.controlsContainerView.alpha = 0.0
-            })
+
+    @objc func seekBackwardLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard !isControlsVisible else { return }
+        handleLongPressSeek(gesture: gesture, direction: .backward)
+    }
+
+    private func handleLongPressSeek(gesture: UILongPressGestureRecognizer, direction: SeekDirection) {
+        switch gesture.state {
+        case .began:
+            self.toggleControls()
+            isSliderEditing = true
+            let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
+            let skipValue = holdValue > 0 ? holdValue : 30
+            
+            seekTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                guard let self = self else { return }
+                
+                let delta = direction == .forward ? skipValue : -skipValue
+                let newTime = max(0, min(self.currentTimeVal + delta, self.duration))
+                
+                self.sliderViewModel.sliderValue = newTime
+                self.player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+                self.currentTimeVal = newTime
+            }
+            
+        case .ended, .cancelled, .failed:
+            self.toggleControls()
+            seekTimer?.invalidate()
+            seekTimer = nil
+            isSliderEditing = false
+            
+        default:
+            break
         }
     }
     
     @objc func seekForward() {
-        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-            self.controlsContainerView.alpha = 1.0
-        })
+        guard !isSliderEditing else { return }
+        guard !isControlsVisible else { return }
+        self.toggleControls()
+        
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
-        currentTimeVal = min(currentTimeVal + finalSkip, duration)
-        player.seek(to: CMTime(seconds: currentTimeVal, preferredTimescale: 600))
+        seekTo(time: currentTimeVal + finalSkip)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                self.controlsContainerView.alpha = 0.0
-            })
+            self.toggleControls()
         }
     }
+
+    @objc func seekBackward() {
+        guard !isSliderEditing else { return }
+        guard !isControlsVisible else { return }
+        self.toggleControls()
+        
+        let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
+        let finalSkip = skipValue > 0 ? skipValue : 10
+        seekTo(time: currentTimeVal - finalSkip)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.toggleControls()
+        }
+    }
+
+    private func seekTo(time: Double) {
+        let targetTime = CMTime(seconds: max(0, min(time, duration)), preferredTimescale: 600)
+        
+        // Temporarily pause time observer updates
+        isSliderEditing = true
+        sliderViewModel.sliderValue = targetTime.seconds
+        
+        player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
+            guard let self = self, completed else { return }
+            DispatchQueue.main.async {
+                self.isSliderEditing = false
+                self.currentTimeVal = targetTime.seconds
+            }
+        }
+    }
+    
+//    @objc func seekBackward() {
+//        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//            self.controlsContainerView.alpha = 1.0
+//        })
+//        let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
+//        let finalSkip = skipValue > 0 ? skipValue : 10
+//        currentTimeVal = max(currentTimeVal - finalSkip, 0)
+//        player.seek(to: CMTime(seconds: currentTimeVal, preferredTimescale: 600))
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+//            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//                self.controlsContainerView.alpha = 0.0
+//            })
+//        }
+//    }
+//    
+//    @objc func seekForward() {
+//        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//            self.controlsContainerView.alpha = 1.0
+//        })
+//        let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
+//        let finalSkip = skipValue > 0 ? skipValue : 10
+//        currentTimeVal = min(currentTimeVal + finalSkip, duration)
+//        player.seek(to: CMTime(seconds: currentTimeVal, preferredTimescale: 600))
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+//            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+//                self.controlsContainerView.alpha = 0.0
+//            })
+//        }
+//    }
     
     @objc func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         let tapLocation = gesture.location(in: view)
@@ -1197,6 +1292,7 @@ class CustomMediaPlayerViewController: UIViewController {
         if isPlaying {
             UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
                 if !self.isControlsVisible {
+                    #if !os(tvOS)
                     self.isControlsVisible = true
                     UIView.animate(withDuration: 0.5) {
                         self.controlsContainerView.alpha = 1.0
@@ -1205,6 +1301,9 @@ class CustomMediaPlayerViewController: UIViewController {
                         #endif
                         self.view.layoutIfNeeded()
                     }
+                    #else
+                    self.toggleControls()
+                    #endif
                 }
             })
             player.pause()
@@ -1678,6 +1777,34 @@ class CustomMediaPlayerViewController: UIViewController {
             let lastPlayedSpeed = UserDefaults.standard.float(forKey: "lastPlaybackSpeed")
             player?.rate = lastPlayedSpeed > 0 ? lastPlayedSpeed : 1.0
         }
+    }
+    
+    override var preferredFocusEnvironments: [UIFocusEnvironment] {
+        return [self.view]
+    }
+    
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        guard !isControlsVisible else {
+                super.pressesBegan(presses, with: event)
+                return
+            }
+            
+            for press in presses {
+                switch press.type {
+                case .leftArrow:
+                    seekBackward()
+                    return
+                case .rightArrow:
+                    seekForward()
+                    return
+                case .playPause:
+                    togglePlayPause()
+                    return
+                default:
+                    break
+                }
+            }
+            super.pressesBegan(presses, with: event)
     }
 }
 

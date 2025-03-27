@@ -39,7 +39,7 @@
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
-		<string>BackgroundGrayColor</string>
+		<string>BlackColor</string>
 		<key>UIImageName</key>
 		<string>BlackHole</string>
 		<key>UIImageRespectsSafeAreaInsets</key>

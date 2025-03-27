@@ -10,6 +10,7 @@ import Foundation
 struct ContinueWatchingItem: Codable, Identifiable {
     let id: UUID
     let imageUrl: String
+    let topLevelImageUrl: String?
     let episodeNumber: Int
     let mediaTitle: String
     let progress: Double
@@ -17,4 +18,13 @@ struct ContinueWatchingItem: Codable, Identifiable {
     let fullUrl: String
     let subtitles: String?
     let module: ScrapingModule
+    
+    var displayImageTypeURL: URL? {
+        if !imageUrl.isEmpty {
+            return URL(string: imageUrl)
+        } else if let topLevelUrl = topLevelImageUrl, !topLevelUrl.isEmpty {
+            return URL(string: topLevelUrl)
+        }
+        return URL(string: "https://raw.githubusercontent.com/cranci1/Sora/refs/heads/main/assets/banner2.png")
+    }
 }

@@ -20,6 +20,7 @@ class VideoPlayerViewController: UIViewController {
     
     var episodeNumber: Int = 0
     var episodeImageUrl: String = ""
+    var topLevelImageUrl: String?
     var mediaTitle: String = ""
     
     init(module: ScrapingModule) {
@@ -95,6 +96,7 @@ class VideoPlayerViewController: UIViewController {
             let item = ContinueWatchingItem(
                 id: UUID(),
                 imageUrl: episodeImageUrl,
+                topLevelImageUrl: topLevelImageUrl,
                 episodeNumber: episodeNumber,
                 mediaTitle: mediaTitle,
                 progress: progress,
