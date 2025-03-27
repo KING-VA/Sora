@@ -1090,9 +1090,12 @@ class CustomMediaPlayerViewController: UIViewController {
         }
     }
     
-    private func startControlsHideTimer() {
+    private func startControlsHideTimer(timeInterval: Int = 10, setIsControlsVisible: Bool = false) {
         controlsHideTimer?.invalidate()
-        controlsHideTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+        controlsHideTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(timeInterval), repeats: false) { [weak self] _ in
+            if setIsControlsVisible {
+                self?.isControlsVisible = true
+            }
             guard let self = self, self.isControlsVisible else { return }
             self.toggleControls()
         }
@@ -1101,6 +1104,30 @@ class CustomMediaPlayerViewController: UIViewController {
     private func resetControlsHideTimer() {
         if isControlsVisible {
             startControlsHideTimer()
+        }
+    }
+    
+    private func updateSliderView() {
+        DispatchQueue.main.async {
+            guard let sliderHostingController = self.sliderHostingController else { return }
+            
+            sliderHostingController.rootView = MusicProgressSlider(
+                value: Binding(
+                    get: { self.sliderViewModel.sliderValue },
+                    set: { self.sliderViewModel.sliderValue = $0 }
+                ),
+                inRange: 0...(self.duration > 0 ? self.duration : 1.0),
+                activeFillColor: .white,
+                fillColor: .white.opacity(0.5),
+                emptyColor: .white.opacity(0.3),
+                height: 30,
+                onEditingChanged: { editing in
+                    self.isSliderEditing = editing
+                    if !editing {
+                        self.seekTo(time: self.sliderViewModel.sliderValue)
+                    }
+                }
+            )
         }
     }
     
@@ -1222,28 +1249,26 @@ class CustomMediaPlayerViewController: UIViewController {
             isSliderEditing = true
             player.pause()
             let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
-            let skipValue = holdValue > 0 ? holdValue : 30
+            var skipValue = holdValue > 0 ? holdValue : 30
             
             seekTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
-                
+                skipValue = skipValue * 1.02
                 let delta = direction == .forward ? skipValue : -skipValue
                 let newTime = max(0, min(self.currentTimeVal + delta, self.duration))
                 
                 self.sliderViewModel.sliderValue = newTime
                 self.currentTimeVal = newTime
+                updateSliderView()
             }
             
         case .ended, .cancelled, .failed:
+            isSliderEditing = false
             self.player.seek(to: CMTime(seconds: currentTimeVal, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
             player.play()
-            self.isControlsVisible = true
-            if self.isControlsVisible {
-                self.toggleControls()
-            }
+            startControlsHideTimer(timeInterval: 10, setIsControlsVisible: true)
             seekTimer?.invalidate()
             seekTimer = nil
-            isSliderEditing = false
             
         default:
             break
@@ -1260,12 +1285,7 @@ class CustomMediaPlayerViewController: UIViewController {
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
         seekTo(time: currentTimeVal + finalSkip)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.isControlsVisible = true
-            if self.isControlsVisible {
-                self.toggleControls()
-            }
-        }
+        startControlsHideTimer(timeInterval: 10, setIsControlsVisible: true)
     }
     
     @objc func seekBackward() {
@@ -1278,21 +1298,14 @@ class CustomMediaPlayerViewController: UIViewController {
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
         seekTo(time: currentTimeVal - finalSkip)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.isControlsVisible = true
-            if self.isControlsVisible {
-                self.toggleControls()
-            }
-        }
+        startControlsHideTimer(timeInterval: 10, setIsControlsVisible: true)
     }
     
     private func seekTo(time: Double) {
         let targetTime = CMTime(seconds: max(0, min(time, duration)), preferredTimescale: 600)
-        
-        // Temporarily pause time observer updates
         isSliderEditing = true
         sliderViewModel.sliderValue = targetTime.seconds
-        
+        updateSliderView()
         player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
             guard let self = self, completed else { return }
             DispatchQueue.main.async {
@@ -1381,12 +1394,7 @@ class CustomMediaPlayerViewController: UIViewController {
 #endif
         }
         isPlaying.toggle()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.isControlsVisible = true
-            if self.isControlsVisible {
-                self.toggleControls()
-            }
-        }
+        startControlsHideTimer(timeInterval: 10, setIsControlsVisible: true)
     }
     
     @objc func sliderEditingEnded() {
