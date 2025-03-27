@@ -129,6 +129,8 @@ class ModuleManager: ObservableObject {
         try? fileManager.removeItem(at: localUrl)
         
         modules.removeAll { $0.id == module.id }
+        // Remove module from addedModulesDict
+        addedModulesDict.removeObject(forKey: "module_" + module.metadataUrl)
         saveModules()
         Logger.shared.log("Deleted module: \(module.metadata.sourceName)")
     }
