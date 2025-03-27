@@ -57,7 +57,7 @@ struct MediaInfoView: View {
     
     var body: some View {
         Group {
-            if isLoading {
+            if isLoading || isFetchingEpisode {
                 ProgressView()
                     .padding()
             } else {

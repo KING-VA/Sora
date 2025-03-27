@@ -104,6 +104,7 @@ class CustomMediaPlayerViewController: UIViewController {
     var isControlsVisible = false
     
     var subtitleBottomConstraint: NSLayoutConstraint?
+    private var controlsHideTimer: Timer?
     
     var subtitleBottomPadding: CGFloat = 10.0 {
         didSet {
@@ -150,23 +151,32 @@ class CustomMediaPlayerViewController: UIViewController {
             self.player.seek(to: seekTime)
         }
 #if os(tvOS)
+        // Add swipe gesture recognizers
+        let directions: [UISwipeGestureRecognizer.Direction] = [.up, .down, .left, .right]
+        for direction in directions {
+            let swipeRecognizer = UISwipeGestureRecognizer(target: self, action: #selector(handleSwipe(_:)))
+            swipeRecognizer.direction = direction
+            swipeRecognizer.delaysTouchesBegan = true
+            view.addGestureRecognizer(swipeRecognizer)
+        }
+        
         // Create a double tap gesture to toggle controls visibility
         tapGesture = UITapGestureRecognizer(target: self, action: #selector(toggleControls))
         tapGesture.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
         tapGesture.isEnabled = isControlsVisible
-        view.addGestureRecognizer(tapGesture)
+//        view.addGestureRecognizer(tapGesture)
         
         // Exit controls gesture to hide controls
         exitMenuGesture = UITapGestureRecognizer(target: self, action: #selector(toggleControls))
         exitMenuGesture.allowedPressTypes = [NSNumber(value: UIPress.PressType.menu.rawValue)]
         exitMenuGesture.isEnabled = !isControlsVisible
-        view.addGestureRecognizer(exitMenuGesture)
+//        view.addGestureRecognizer(exitMenuGesture)
         
         // Create a playpause button detector to toggle play/pause
         playPauseTap = UITapGestureRecognizer(target: self, action: #selector(togglePlayPause))
         playPauseTap.allowedPressTypes = [NSNumber(value: UIPress.PressType.playPause.rawValue)]
         playPauseTap.cancelsTouchesInView = false
-        view.addGestureRecognizer(playPauseTap)
+//        view.addGestureRecognizer(playPauseTap)
         
         // Create forward and backwards press types
         forwardPress = UITapGestureRecognizer(target: self, action: #selector(seekForward))
@@ -1080,7 +1090,22 @@ class CustomMediaPlayerViewController: UIViewController {
         }
     }
     
+    private func startControlsHideTimer() {
+        controlsHideTimer?.invalidate()
+        controlsHideTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+            guard let self = self, self.isControlsVisible else { return }
+            self.toggleControls()
+        }
+    }
+    
+    private func resetControlsHideTimer() {
+        if isControlsVisible {
+            startControlsHideTimer()
+        }
+    }
+    
     @objc func toggleControls() {
+        controlsHideTimer?.invalidate()
         tapGesture.isEnabled = isControlsVisible
         exitMenuGesture.isEnabled = !isControlsVisible
         isControlsVisible.toggle()
@@ -1100,11 +1125,7 @@ class CustomMediaPlayerViewController: UIViewController {
                         self.watchNextButton.alpha = 0.8
                     })
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
-                    if self.isControlsVisible {
-                        self.toggleControls()
-                    }
-                }
+                self.startControlsHideTimer()
                 self.setNeedsFocusUpdate()
             } else {
                 // When controls are hidden:
@@ -1196,9 +1217,10 @@ class CustomMediaPlayerViewController: UIViewController {
         switch gesture.state {
         case .began:
             if !self.isControlsVisible {
-                self.toggleControls()
+                self.showControlsWithoutStateTrigger()
             }
             isSliderEditing = true
+            player.pause()
             let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
             let skipValue = holdValue > 0 ? holdValue : 30
             
@@ -1209,11 +1231,13 @@ class CustomMediaPlayerViewController: UIViewController {
                 let newTime = max(0, min(self.currentTimeVal + delta, self.duration))
                 
                 self.sliderViewModel.sliderValue = newTime
-                self.player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
                 self.currentTimeVal = newTime
             }
             
         case .ended, .cancelled, .failed:
+            self.player.seek(to: CMTime(seconds: currentTimeVal, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+            player.play()
+            self.isControlsVisible = true
             if self.isControlsVisible {
                 self.toggleControls()
             }
@@ -1230,13 +1254,14 @@ class CustomMediaPlayerViewController: UIViewController {
         guard !isSliderEditing else { return }
         guard !isControlsVisible else { return }
         if !self.isControlsVisible {
-            self.toggleControls()
+            self.showControlsWithoutStateTrigger()
         }
         
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
         seekTo(time: currentTimeVal + finalSkip)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.isControlsVisible = true
             if self.isControlsVisible {
                 self.toggleControls()
             }
@@ -1247,13 +1272,14 @@ class CustomMediaPlayerViewController: UIViewController {
         guard !isSliderEditing else { return }
         guard !isControlsVisible else { return }
         if !self.isControlsVisible {
-            self.toggleControls()
+            self.showControlsWithoutStateTrigger()
         }
         
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
         seekTo(time: currentTimeVal - finalSkip)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.isControlsVisible = true
             if self.isControlsVisible {
                 self.toggleControls()
             }
@@ -1321,25 +1347,25 @@ class CustomMediaPlayerViewController: UIViewController {
         dismiss(animated: true, completion: nil)
     }
     
+    func showControlsWithoutStateTrigger() {
+        UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
+            if !self.isControlsVisible {
+//                self.isControlsVisible = true
+                UIView.animate(withDuration: 0.5) {
+                    self.controlsContainerView.alpha = 1.0
+#if !os(tvOS)
+                    self.skip85Button.alpha = 0.8
+#endif
+                    self.view.layoutIfNeeded()
+                }
+            }
+        })
+    }
+    
     @objc func togglePlayPause() {
         Logger.shared.log("Toggling play/pause " + (isPlaying ? " (pausing)" : " (playing)"))
         if isPlaying {
-            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                if !self.isControlsVisible {
-#if !os(tvOS)
-                    self.isControlsVisible = true
-                    UIView.animate(withDuration: 0.5) {
-                        self.controlsContainerView.alpha = 1.0
-#if !os(tvOS)
-                        self.skip85Button.alpha = 0.8
-#endif
-                        self.view.layoutIfNeeded()
-                    }
-#else
-                    self.toggleControls()
-#endif
-                }
-            })
+            showControlsWithoutStateTrigger()
             player.pause()
 #if os(tvOS)
             playPauseButton.setBackgroundImage(UIImage(systemName: "play.fill"), for: .normal)
@@ -1356,12 +1382,10 @@ class CustomMediaPlayerViewController: UIViewController {
         }
         isPlaying.toggle()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
-                self.controlsContainerView.alpha = 0.0
-#if !os(tvOS)
-                self.skip85Button.alpha = 0.0
-#endif
-            })
+            self.isControlsVisible = true
+            if self.isControlsVisible {
+                self.toggleControls()
+            }
         }
     }
     
@@ -1795,6 +1819,10 @@ class CustomMediaPlayerViewController: UIViewController {
         }
     }
     
+    @objc private func handleSwipe(_ gesture: UISwipeGestureRecognizer) {
+        resetControlsHideTimer()
+    }
+    
     private func beginHoldSpeed() {
         guard let player = player else { return }
         originalRate = player.rate
@@ -1818,13 +1846,18 @@ class CustomMediaPlayerViewController: UIViewController {
     }
     
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        Logger.shared.log("Presses began: " + String(describing: presses.first?.type) + " (Controls Visible: \(isControlsVisible))")
         guard !isControlsVisible else {
             for press in presses {
                 switch press.type {
-                case .select:
+                case .menu:
                     toggleControls()
                     return
+                case .playPause:
+                    togglePlayPause()
+                    return
                 default:
+                    Logger.shared.log("Unhandled press type (No Controls Visible): \(press.type)")
                     break
                 }
             }
@@ -1832,25 +1865,27 @@ class CustomMediaPlayerViewController: UIViewController {
             return
         }
         
+        resetControlsHideTimer()
         for press in presses {
             switch press.type {
-            case .leftArrow:
-                seekBackward()
-                return
-            case .rightArrow:
-                seekForward()
+            case .select:
+                Logger.shared.log("Toggling controls")
+                toggleControls()
                 return
             case .playPause:
                 togglePlayPause()
                 return
-            case .menu:
-                toggleControls()
-                return
             default:
+                Logger.shared.log("Unhandled press type: \(press.type)")
                 break
             }
         }
         super.pressesBegan(presses, with: event)
+    }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        resetControlsHideTimer()
+        super.touchesBegan(touches, with: event)
     }
 }
 

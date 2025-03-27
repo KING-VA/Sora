@@ -49,8 +49,7 @@ struct MusicProgressSlider<T: BinaryFloatingPoint>: View {
                         Spacer(minLength: 0)
                         Text("-" + (inRange.upperBound - value).asTimeString(style: .positional, showHours: shouldShowHours))
                     }
-                    
-                    .font(.system(size: 12))
+                    .font(.system(size: 16))
                     .foregroundColor(isActive ? fillColor : emptyColor)
                 }
                 .frame(width: isActive ? bounds.size.width * 1.04 : bounds.size.width, alignment: .center)
