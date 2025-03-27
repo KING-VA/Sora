@@ -151,8 +151,8 @@ class CustomMediaPlayerViewController: UIViewController {
         #if os(tvOS)
         // Create a double tap gesture to toggle controls visibility
         tapGesture = UITapGestureRecognizer(target: self, action: #selector(toggleControls))
-        tapGesture.allowedPressTypes = [NSNumber(value: UIPress.PressType.menu.rawValue)]
-        tapGesture.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirect.rawValue), NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)]
+        tapGesture.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+        tapGesture.isEnabled = isControlsVisible
         view.addGestureRecognizer(tapGesture)
         
         // Create a playpause button detector to toggle play/pause
@@ -227,6 +227,13 @@ class CustomMediaPlayerViewController: UIViewController {
         
         player.play()
         
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        
         if let url = subtitlesURL, !url.isEmpty {
             subtitlesLoader.load(from: url)
         }
@@ -263,7 +270,7 @@ class CustomMediaPlayerViewController: UIViewController {
             NSLayoutConstraint.activate(self.watchNextButtonControlsConstraints)
             self.watchNextButton.alpha = 1.0
             self.view.layoutIfNeeded()
-//            self.toggleControls()
+            self.toggleControls()
         }
     }
     
@@ -281,6 +288,7 @@ class CustomMediaPlayerViewController: UIViewController {
             UserDefaults.standard.set(playbackSpeed, forKey: "lastPlaybackSpeed")
         }
         player.pause()
+        NotificationCenter.default.removeObserver(self)
         updateTimer?.invalidate()
         inactivityTimer?.invalidate()
         if let token = timeObserverToken {
@@ -1066,7 +1074,7 @@ class CustomMediaPlayerViewController: UIViewController {
     }
     
     @objc func toggleControls() {
-        Logger.shared.log("Toggling controls visibility " + (isControlsVisible ? "off" : "on"))
+        tapGesture.isEnabled = isControlsVisible
         isControlsVisible.toggle()
         UIView.animate(withDuration: 0.5, delay: 0, options: .curveEaseInOut, animations: {
             self.controlsContainerView.alpha = self.isControlsVisible ? 1 : 0
@@ -1109,6 +1117,9 @@ class CustomMediaPlayerViewController: UIViewController {
 //        self.view.addGestureRecognizer(self.playPauseTap)
     }
     
+    @objc private func appWillEnterForeground() {
+        self.tapGesture.isEnabled = isControlsVisible
+    }
 //    @objc func seekBackwardLongPress(_ gesture: UILongPressGestureRecognizer) {
 //        // TODO: Need to update slider internals or redo this
 //        if gesture.state == .began {
@@ -1173,7 +1184,9 @@ class CustomMediaPlayerViewController: UIViewController {
     private func handleLongPressSeek(gesture: UILongPressGestureRecognizer, direction: SeekDirection) {
         switch gesture.state {
         case .began:
-            self.toggleControls()
+            if !self.isControlsVisible {
+                self.toggleControls()
+            }
             isSliderEditing = true
             let holdValue = UserDefaults.standard.double(forKey: "skipIncrementHold")
             let skipValue = holdValue > 0 ? holdValue : 30
@@ -1190,7 +1203,9 @@ class CustomMediaPlayerViewController: UIViewController {
             }
             
         case .ended, .cancelled, .failed:
-            self.toggleControls()
+            if self.isControlsVisible {
+                self.toggleControls()
+            }
             seekTimer?.invalidate()
             seekTimer = nil
             isSliderEditing = false
@@ -1203,26 +1218,34 @@ class CustomMediaPlayerViewController: UIViewController {
     @objc func seekForward() {
         guard !isSliderEditing else { return }
         guard !isControlsVisible else { return }
-        self.toggleControls()
+        if !self.isControlsVisible {
+            self.toggleControls()
+        }
         
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
         seekTo(time: currentTimeVal + finalSkip)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.toggleControls()
+            if self.isControlsVisible {
+                self.toggleControls()
+            }
         }
     }
 
     @objc func seekBackward() {
         guard !isSliderEditing else { return }
         guard !isControlsVisible else { return }
-        self.toggleControls()
+        if !self.isControlsVisible {
+            self.toggleControls()
+        }
         
         let skipValue = UserDefaults.standard.double(forKey: "skipIncrement")
         let finalSkip = skipValue > 0 ? skipValue : 10
         seekTo(time: currentTimeVal - finalSkip)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.toggleControls()
+            if self.isControlsVisible {
+                self.toggleControls()
+            }
         }
     }
 
@@ -1785,6 +1808,16 @@ class CustomMediaPlayerViewController: UIViewController {
     
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard !isControlsVisible else {
+            for press in presses {
+                switch press.type {
+                case .select:
+                    Logger.shared.log("Select press detected")
+                    toggleControls()
+                    return
+                default:
+                    break
+                }
+            }
                 super.pressesBegan(presses, with: event)
                 return
             }
@@ -1799,6 +1832,9 @@ class CustomMediaPlayerViewController: UIViewController {
                     return
                 case .playPause:
                     togglePlayPause()
+                    return
+                case .menu:
+                    toggleControls()
                     return
                 default:
                     break
