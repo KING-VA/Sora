@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if !os(tvOS)
 import FFmpegSupport
+#endif
 import UIKit
 
 extension Notification.Name {
@@ -182,8 +184,11 @@ class DownloadManager {
                     "status": "Converting",
                     "progress": 0.5
                 ])
-                
+                #if !os(tvOS)
                 let success = ffmpeg(ffmpegCommand)
+                #elseif os(tvOS)
+                let success = 1
+                #endif
                 DispatchQueue.main.async { [weak self] in
                     if success == 0 {
                         NotificationCenter.default.post(name: .DownloadManagerStatusUpdate, object: nil, userInfo: [
@@ -196,7 +201,11 @@ class DownloadManager {
                         Logger.shared.log("Conversion successful: \(outputFileURL)")
                         completion(true, outputFileURL)
                     } else {
+                        #if !os(tvOS)
                         Logger.shared.log("Conversion failed")
+                        #elseif os(tvOS)
+                        Logger.shared.log("Downloads not supported on tvOS due to FFMPEG library compatibility", type: "Error")
+                        #endif
                         completion(false, nil)
                     }
                     

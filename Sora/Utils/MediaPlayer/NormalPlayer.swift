@@ -52,8 +52,9 @@ class NormalPlayer: AVPlayerViewController {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .moviePlayback, options: .mixWithOthers)
             try audioSession.setActive(true)
-            
+            #if !os(tvOS)
             try audioSession.overrideOutputAudioPort(.speaker)
+            #endif
         } catch {
             Logger.shared.log("Failed to set up AVAudioSession: \(error)")
         }

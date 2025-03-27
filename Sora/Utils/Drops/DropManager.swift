@@ -13,6 +13,7 @@ class DropManager {
     
     private init() {}
     
+    #if !os(tvOS)
     func showDrop(title: String, subtitle: String, duration: TimeInterval, icon: UIImage?) {
         let position: Drop.Position = .top
         
@@ -25,4 +26,9 @@ class DropManager {
         )
         Drops.show(drop)
     }
+    #else
+    func showDrop(title: String, subtitle: String, duration: TimeInterval, icon: UIImage?) {
+        Logger.shared.log("Drops are not supported on tvOS")
+    }
+    #endif
 }

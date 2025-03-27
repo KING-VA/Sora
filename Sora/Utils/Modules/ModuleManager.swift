@@ -9,6 +9,7 @@ import Foundation
 
 class ModuleManager: ObservableObject {
     @Published var modules: [ScrapingModule] = []
+    private let addedModulesDict = UserDefaults.standard
     
     private let fileManager = FileManager.default
     private let modulesFileName = "modules.json"
@@ -18,7 +19,12 @@ class ModuleManager: ObservableObject {
     }
     
     private func getDocumentsDirectory() -> URL {
+        #if !os(tvOS)
         fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        #else
+//        return the path of the cache directory
+        fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        #endif
     }
     
     private func getModulesFilePath() -> URL {
@@ -26,9 +32,38 @@ class ModuleManager: ObservableObject {
     }
     
     func loadModules() {
+        #if os(tvOS)
+//        Use the NSUserDefaults to rebuild the modules
+        for (key, metadataUrl) in addedModulesDict.dictionaryRepresentation() {
+            guard let metadataUrl = metadataUrl as? String else { continue }
+            // Ensure key starts with "module_"
+            if key.starts(with: "module_") {
+                Logger.shared.log("Rebuilding module: \(key.replacingOccurrences(of: "module_", with: ""))")
+                Task {
+                    let _ = try? await addModule(metadataUrl: metadataUrl)
+                }
+            }
+        }
+        // Wait for all modules to be added
+        sleep(1)
+        #endif
         let url = getModulesFilePath()
         guard let data = try? Data(contentsOf: url) else { return }
         modules = (try? JSONDecoder().decode([ScrapingModule].self, from: data)) ?? []
+        removeDuplicateModules()
+    }
+    
+    // Create function to remove duplication modules (check to see if the metadataUrl is already present)
+    func removeDuplicateModules() {
+        for module1 in modules {
+            for module2 in modules {
+                if module1.id != module2.id {
+                    if module1.metadataUrl == module2.metadataUrl {
+                        deleteModule(module2)
+                    }
+                }
+            }
+        }
     }
     
     private func saveModules() {
@@ -46,6 +81,13 @@ class ModuleManager: ObservableObject {
             throw NSError(domain: "Module already exists", code: -1)
         }
         
+        #if os(tvOS)
+        // Check to see if the url is already in the addedModulesDict
+        if addedModulesDict.object(forKey: "module_" + metadataUrl) != nil {
+            throw NSError(domain: "Module already exists", code: -1)
+        }
+        #endif
+        
         let (metadataData, _) = try await URLSession.custom.data(from: url)
         let metadata = try JSONDecoder().decode(ModuleMetadata.self, from: metadataData)
         
@@ -57,6 +99,11 @@ class ModuleManager: ObservableObject {
         guard let jsContent = String(data: scriptData, encoding: .utf8) else {
             throw NSError(domain: "Invalid script encoding", code: -1)
         }
+        
+        #if os(tvOS)
+//        Add to addedModulesDict so that we can rebuild later
+        addedModulesDict.set(metadataUrl, forKey: "module_" + metadataUrl)
+        #endif
         
         let fileName = "\(UUID().uuidString).js"
         let localUrl = getDocumentsDirectory().appendingPathComponent(fileName)
@@ -73,7 +120,7 @@ class ModuleManager: ObservableObject {
             self.saveModules()
             Logger.shared.log("Added module: \(module.metadata.sourceName)")
         }
-        
+        removeDuplicateModules()
         return module
     }
     

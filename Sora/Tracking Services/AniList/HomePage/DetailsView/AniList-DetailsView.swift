@@ -39,7 +39,9 @@ struct AniListDetailsView: View {
                 }
             }
         }
+#if !os(tvOS)
         .navigationBarTitle("", displayMode: .inline)
+#endif
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear {
             viewModel.fetchDetails()
@@ -105,10 +107,12 @@ struct MediaHeaderView: View {
                     Text(userPreferred)
                         .font(.system(size: 17))
                         .fontWeight(.bold)
+#if !os(tvOS)
                         .onLongPressGesture {
                             UIPasteboard.general.string = userPreferred
                             DropManager.shared.showDrop(title: "Copied to Clipboard", subtitle: "", duration: 1.0, icon: UIImage(systemName: "doc.on.clipboard.fill"))
                         }
+#endif
                 }
                 
                 if let titleDict = media["title"] as? [String: Any],

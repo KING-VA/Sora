@@ -17,13 +17,15 @@ struct SettingsViewGeneral: View {
     @AppStorage("mediaColumnsPortrait") private var mediaColumnsPortrait: Int = 2
     @AppStorage("mediaColumnsLandscape") private var mediaColumnsLandscape: Int = 4
     
-    private let metadataProvidersList = ["AniList"]
+    private let metadataProvidersList = ["AniList", "TMDB"]
     @EnvironmentObject var settings: Settings
     
     var body: some View {
         Form {
             Section(header: Text("Interface")) {
+                #if !os(tvOS)
                 ColorPicker("Accent Color", selection: $settings.accentColor)
+                #endif
                 HStack() {
                     Text("Appearance")
                     Picker("Appearance", selection: $settings.selectedAppearance) {

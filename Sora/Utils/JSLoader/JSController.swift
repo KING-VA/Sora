@@ -393,8 +393,24 @@ class JSController: ObservableObject {
                 if let jsonString = result.toString(),
                    let data = jsonString.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                    let streamUrl = json["stream"] as? String
-                    let subtitlesUrl = json["subtitles"] as? String
+                    Logger.shared.log("First Fetch: " + String(describing: result))
+                    var streamUrl = json["stream"] as? String
+                    var subtitlesUrl = json["subtitles"] as? String
+                    if streamUrl == nil {
+                        // Try alternate JSON decoding method
+                        // Extract list
+                        let streamList = json["streams"] as? Array<[String: String]>
+                        if streamList == nil {
+                            Logger.shared.log("Failed to parse softsub JSON in JS", type: "Error")
+                            DispatchQueue.main.async {
+                                completion((nil, nil))
+                            }
+                            return
+                        }
+                        let firstStream = streamList?.first
+                        streamUrl = firstStream?["url"] as? String
+                        subtitlesUrl = firstStream?["subtitles"] as? String
+                    }
                     Logger.shared.log("Starting stream from: \(streamUrl ?? "nil") with subtitles: \(subtitlesUrl ?? "nil")", type: "Stream")
                     DispatchQueue.main.async {
                         completion((streamUrl, subtitlesUrl))
@@ -465,6 +481,7 @@ class JSController: ObservableObject {
                 
                 let thenBlock: @convention(block) (JSValue) -> Void = { result in
                     if softsub {
+                        Logger.shared.log("Second Fetch: " + String(describing: result))
                         if let jsonString = result.toString(),
                            let data = jsonString.data(using: .utf8),
                            let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {

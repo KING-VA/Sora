@@ -41,7 +41,7 @@ struct SettingsViewPlayer: View {
                 Toggle("Force Landscape", isOn: $isAlwaysLandscape)
                     .tint(.accentColor)
             }
-            
+            #if !os(tvOS)
             Section(header: Text("Speed Settings")) {
                 Toggle("Remember Playback speed", isOn: $isRememberPlaySpeed)
                     .tint(.accentColor)
@@ -71,6 +71,7 @@ struct SettingsViewPlayer: View {
                     Stepper("\(Int(skipIncrementHold))s", value: $skipIncrementHold, in: 5...300, step: 5)
                 }
             }
+            #endif
             SubtitleSettingsSection()
         }
         .navigationTitle("Player")
@@ -130,7 +131,7 @@ struct SubtitleSettingsSection: View {
                         settings.backgroundEnabled = newValue
                     }
                 }
-            
+            #if !os(tvOS)
             HStack {
                 Text("Font Size:")
                 Spacer()
@@ -152,6 +153,7 @@ struct SubtitleSettingsSection: View {
                         }
                     }
             }
+            #endif
         }
     }
 }

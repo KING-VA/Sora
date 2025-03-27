@@ -13,29 +13,50 @@ struct SettingsViewLogger: View {
     
     var body: some View {
         VStack {
+            #if os(tvOS)
+            HStack {
+                Spacer()
+                HStack {
+                    Button(role: .destructive, action: {
+                        Logger.shared.clearLogs()
+                        logs = Logger.shared.getLogs()
+                    }) {
+                        Label("Clear Logs", systemImage: "trash")
+                    }
+                    NavigationLink(destination: SettingsViewLoggerFilter(viewModel: filterViewModel)) {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                }
+            }
+            #endif
             ScrollView {
                 Text(logs)
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
+#if !os(tvOS)
                     .textSelection(.enabled)
+#endif
             }
             .navigationTitle("Logs")
             .onAppear {
                 logs = Logger.shared.getLogs()
             }
         }
+        #if !os(tvOS)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack {
                     Menu {
+#if !os(tvOS)
                         Button(action: {
                             UIPasteboard.general.string = logs
                             DropManager.shared.showDrop(title: "Copied to Clipboard", subtitle: "", duration: 1.0, icon: UIImage(systemName: "doc.on.clipboard.fill"))
                         }) {
                             Label("Copy to Clipboard", systemImage: "doc.on.doc")
                         }
+#endif
                         Button(role: .destructive, action: {
                             Logger.shared.clearLogs()
                             logs = Logger.shared.getLogs()
@@ -54,5 +75,6 @@ struct SettingsViewLogger: View {
                 }
             }
         }
+        #endif
     }
 }

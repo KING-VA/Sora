@@ -7,7 +7,9 @@
 
 import SwiftUI
 import Kingfisher
+#if !os(tvOS)
 import SafariServices
+#endif
 
 struct MediaItem: Identifiable {
     let id = UUID()
@@ -66,48 +68,75 @@ struct MediaInfoView: View {
                                 .placeholder {
                                     RoundedRectangle(cornerRadius: 10)
                                         .fill(Color.gray.opacity(0.3))
+                                    #if !os(tvOS)
                                         .frame(width: 150, height: 225)
+                                    #else
+                                        .frame(width: 300, height: 450)
+                                    #endif
                                         .shimmering()
                                 }
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
+                            #if !os(tvOS)
                                 .frame(width: 150, height: 225)
+                            #else
+                                .frame(width: 300, height: 450)
+                            #endif
                                 .clipped()
                                 .cornerRadius(10)
                             
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(title)
+                                #if !os(tvOS)
                                     .font(.system(size: 17))
+                                #else
+                                    .font(.largeTitle)
+                                #endif
                                     .fontWeight(.bold)
+                                #if !os(tvOS)
                                     .onLongPressGesture {
                                         UIPasteboard.general.string = title
                                         DropManager.shared.showDrop(title: "Copied to Clipboard", subtitle: "", duration: 1.0, icon: UIImage(systemName: "doc.on.clipboard.fill"))
                                     }
+                                #endif
+                                
+                                Spacer()
                                 
                                 if !aliases.isEmpty && aliases != title && aliases != "N/A" && aliases != "No Data" {
                                     Text(aliases)
+                                    #if !os(tvOS)
                                         .font(.system(size: 13))
+                                    #else
+                                        .font(.title3)
+                                    #endif
                                         .foregroundColor(.secondary)
                                 }
-                                
-                                Spacer()
                                 
                                 if !airdate.isEmpty && airdate != "N/A" && airdate != "No Data" {
                                     HStack(alignment: .center, spacing: 12) {
                                         HStack(spacing: 4) {
                                             Image(systemName: "calendar")
                                                 .resizable()
+                                            #if !os(tvOS)
                                                 .frame(width: 15, height: 15)
+                                            #else
+                                                .frame(maxWidth: 40, maxHeight: 40)
+                                                .padding(.trailing)
+                                            #endif
                                                 .foregroundColor(.secondary)
                                             
                                             Text(airdate)
+                                            #if !os(tvOS)
                                                 .font(.system(size: 12))
+                                            #else
+                                                .font(.title3)
+                                            #endif
                                                 .foregroundColor(.secondary)
                                         }
                                         .padding(4)
                                     }
                                 }
-                                
+                                #if !os(tvOS)
                                 HStack(alignment: .center, spacing: 12) {
                                     Button(action: {
                                         openSafariViewController(with: href)
@@ -126,6 +155,7 @@ struct MediaInfoView: View {
                                         .background(Capsule().fill(Color.accentColor.opacity(0.4)))
                                     }
                                 }
+                                #endif
                             }
                         }
                         
@@ -133,7 +163,11 @@ struct MediaInfoView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(alignment: .center) {
                                     Text("Synopsis")
+                                    #if !os(tvOS)
                                         .font(.system(size: 18))
+                                    #else
+                                        .font(.title2)
+                                    #endif
                                         .fontWeight(.bold)
                                     
                                     Spacer()
@@ -142,13 +176,21 @@ struct MediaInfoView: View {
                                         showFullSynopsis.toggle()
                                     }) {
                                         Text(showFullSynopsis ? "Less" : "More")
+                                        #if !os(tvOS)
                                             .font(.system(size: 14))
+                                        #else
+                                            .font(.headline)
+                                        #endif
                                     }
                                 }
                                 
                                 Text(synopsis)
                                     .lineLimit(showFullSynopsis ? nil : 4)
+                                #if !os(tvOS)
                                     .font(.system(size: 14))
+                                #else
+                                    .font(.body)
+                                #endif
                             }
                         }
                         
@@ -160,7 +202,7 @@ struct MediaInfoView: View {
                                     Image(systemName: "play.fill")
                                         .foregroundColor(.primary)
                                     Text(startWatchingText)
-                                        .font(.headline)
+                                        .font(.callout)
                                         .foregroundColor(.primary)
                                 }
                                 .padding()
@@ -181,7 +223,7 @@ struct MediaInfoView: View {
                             }) {
                                 Image(systemName: libraryManager.isBookmarked(href: href, moduleName: module.metadata.sourceName) ? "bookmark.fill" : "bookmark")
                                     .resizable()
-                                    .frame(width: 20, height: 27)
+                                    .frame(maxWidth: 80)
                                     .foregroundColor(Color.accentColor)
                             }
                         }
@@ -190,7 +232,12 @@ struct MediaInfoView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("Episodes")
+                                    #if !os(tvOS)
                                         .font(.system(size: 18))
+                                    #else
+                                        .font(.title2)
+                                        .padding(.bottom)
+                                    #endif
                                         .fontWeight(.bold)
                                     
                                     Spacer()
@@ -204,7 +251,9 @@ struct MediaInfoView: View {
                                             }
                                         } label: {
                                             Text("\(selectedRange.lowerBound + 1)-\(selectedRange.upperBound)")
+                                            #if !os(tvOS)
                                                 .font(.system(size: 14))
+                                            #endif
                                                 .foregroundColor(.accentColor)
                                         }
                                     } else if isGroupedBySeasons {
@@ -218,7 +267,11 @@ struct MediaInfoView: View {
                                                 }
                                             } label: {
                                                 Text("Season \(selectedSeason + 1)")
+                                                #if !os(tvOS)
                                                     .font(.system(size: 14))
+                                                #else
+                                                    .font(.title2)
+                                                #endif
                                                     .foregroundColor(.accentColor)
                                             }
                                         }
@@ -336,7 +389,9 @@ struct MediaInfoView: View {
                         }
                     }
                     .padding()
+                    #if !os(tvOS)
                     .navigationBarTitleDisplayMode(.inline)
+                    #endif
                     .navigationBarTitle("")
                     .navigationViewStyle(StackNavigationViewStyle())
                 }
@@ -369,7 +424,7 @@ struct MediaInfoView: View {
             let nextEp = episodeLinks[finishedIndex + 1]
             return "Start Watching Episode \(nextEp.number)"
         } else if let unfinishedIndex = unfinished {
-            return "Continue Watching Episode \(episodeLinks[unfinishedIndex].number)"
+            return episodeLinks.count == 1 ? "Continue Watching" : "Continue Watching Episode \(episodeLinks[unfinishedIndex].number)"
         }
         
         return "Start Watching"
@@ -481,6 +536,7 @@ struct MediaInfoView: View {
                     }
                 } catch {
                     Logger.shared.log("Error loading module: \(error)", type: "Error")
+                    moduleManager.loadModules()
                     self.isLoading = false
                     self.isRefetching = false
                 }
@@ -581,11 +637,13 @@ struct MediaInfoView: View {
     func handleStreamFailure(error: Error? = nil) {
         if let error = error {
             Logger.shared.log("Error loading module: \(error)", type: "Error")
+            moduleManager.loadModules()
             AnalyticsManager.shared.sendEvent(event: "error", additionalData: ["error": error, "message": "Failed to fetch stream"])
         }
         DropManager.shared.showDrop(title: "Stream not Found", subtitle: "", duration: 1.0, icon: UIImage(systemName: "xmark"))
-        
+        #if !os(tvOS)
         UINotificationFeedbackGenerator().notificationOccurred(.error)
+        #endif
         self.isLoading = false
     }
     
@@ -662,6 +720,7 @@ struct MediaInfoView: View {
         DropManager.shared.showDrop(title: "Fetching Next Episode", subtitle: "", duration: 0.5, icon: UIImage(systemName: "arrow.triangle.2.circlepath"))
     }
     
+    #if !os(tvOS)
     private func openSafariViewController(with urlString: String) {
         guard let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) else {
             Logger.shared.log("Unable to open the webpage", type: "Error")
@@ -673,6 +732,7 @@ struct MediaInfoView: View {
             rootVC.present(safariViewController, animated: true, completion: nil)
         }
     }
+    #endif
     
     private func fetchItemID(byTitle title: String, completion: @escaping (Result<Int, Error>) -> Void) {
         let query = """

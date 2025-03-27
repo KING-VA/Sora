@@ -18,19 +18,26 @@ struct LibraryView: View {
     @Environment(\.verticalSizeClass) var verticalSizeClass
     
     @State private var continueWatchingItems: [ContinueWatchingItem] = []
+    #if !os(tvOS)
     @State private var isLandscape: Bool = UIDevice.current.orientation.isLandscape
-    
+    #else
+    @State private var isLandscape: Bool = true
+    #endif
     private let columns = [
         GridItem(.adaptive(minimum: 150), spacing: 12)
     ]
     
     private var columnsCount: Int {
+        #if os(tvOS)
+        return mediaColumnsLandscape
+        #else
         if UIDevice.current.userInterfaceIdiom == .pad {
             let isLandscape = UIScreen.main.bounds.width > UIScreen.main.bounds.height
             return isLandscape ? mediaColumnsLandscape : mediaColumnsPortrait
         } else {
             return verticalSizeClass == .compact ? mediaColumnsLandscape : mediaColumnsPortrait
         }
+        #endif
     }
     
     private var cellWidth: CGFloat {
@@ -41,7 +48,11 @@ struct LibraryView: View {
         let safeWidth = UIScreen.main.bounds.width - safeAreaInsets.left - safeAreaInsets.right
         let totalSpacing: CGFloat = 16 * CGFloat(columnsCount + 1)
         let availableWidth = safeWidth - totalSpacing
+        #if os(tvOS)
+        return (availableWidth / CGFloat(columnsCount)) * 0.5
+        #else
         return availableWidth / CGFloat(columnsCount)
+        #endif
     }
     
     var body: some View {
@@ -74,6 +85,7 @@ struct LibraryView: View {
                         }, removeItem: { item in
                             removeContinueWatchingItem(item: item)
                         })
+                        .padding(.vertical, 50)
                     }
                     
                     Text("Bookmarks")
@@ -99,7 +111,7 @@ struct LibraryView: View {
                             ForEach(libraryManager.bookmarks) { item in
                                 if let module = moduleManager.modules.first(where: { $0.id.uuidString == item.moduleId }) {
                                     NavigationLink(destination: MediaInfoView(title: item.title, imageUrl: item.imageUrl, href: item.href, module: module)) {
-                                        VStack(alignment: .leading) {
+                                        VStack {
                                             ZStack {
                                                 KFImage(URL(string: item.imageUrl))
                                                     .placeholder {
@@ -117,7 +129,11 @@ struct LibraryView: View {
                                                     .overlay(
                                                         KFImage(URL(string: module.metadata.iconUrl))
                                                             .resizable()
+                                                        #if os(tvOS)
+                                                            .frame(width: 40, height: 40)
+                                                        #else
                                                             .frame(width: 24, height: 24)
+                                                        #endif
                                                             .cornerRadius(4)
                                                             .padding(4),
                                                         alignment: .topLeading
@@ -140,6 +156,7 @@ struct LibraryView: View {
                                 }
                             }
                         }
+                        #if !os(tvOS)
                         .padding(.horizontal, 20)
                         .onAppear {
                             updateOrientation()
@@ -147,11 +164,14 @@ struct LibraryView: View {
                         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
                             updateOrientation()
                         }
+                        #endif
                     }
                 }
                 .padding(.vertical, 20)
             }
+            #if !os(tvOS)
             .navigationTitle("Library")
+            #endif
             .onAppear {
                 fetchContinueWatching()
             }
@@ -176,19 +196,24 @@ struct LibraryView: View {
         ContinueWatchingManager.shared.remove(item: item)
         continueWatchingItems.removeAll { $0.id == item.id }
     }
-    
+#if !os(tvOS)
     private func updateOrientation() {
         DispatchQueue.main.async {
             isLandscape = UIDevice.current.orientation.isLandscape
         }
     }
+#endif
     
     private func determineColumns() -> Int {
+        #if os(tvOS)
+        return mediaColumnsLandscape
+        #else
         if UIDevice.current.userInterfaceIdiom == .pad {
             return isLandscape ? mediaColumnsLandscape : mediaColumnsPortrait
         } else {
             return verticalSizeClass == .compact ? mediaColumnsLandscape : mediaColumnsPortrait
         }
+        #endif
     }
 }
 
@@ -211,7 +236,11 @@ struct ContinueWatchingSection: View {
                 }
                 .padding(.horizontal, 20)
             }
+            #if !os(tvOS)
             .frame(height: 190)
+            #else
+            .frame(height: 260)
+            #endif
         }
     }
 }
@@ -264,19 +293,32 @@ struct ContinueWatchingCell: View {
                         .placeholder {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(Color.gray.opacity(0.3))
+                                #if os(tvOS)
+                                .frame(width: 360, height: 200)
+                                #else
                                 .frame(width: 240, height: 135)
+                                #endif
                                 .shimmering()
                         }
                         .setProcessor(RoundCornerImageProcessor(cornerRadius: 10))
                         .resizable()
                         .aspectRatio(16/9, contentMode: .fill)
+                        #if os(tvOS)
+                        .frame(width: 360, height: 200)
+                        #else
                         .frame(width: 240, height: 135)
+                        #endif
                         .cornerRadius(10)
                         .clipped()
+                        .padding(.vertical)
                         .overlay(
                             KFImage(URL(string: item.module.metadata.iconUrl))
                                 .resizable()
+                            #if os(tvOS)
+                                .frame(width: 50, height: 50)
+                            #else
                                 .frame(width: 24, height: 24)
+                            #endif
                                 .cornerRadius(4)
                                 .padding(4),
                             alignment: .topLeading
@@ -304,13 +346,20 @@ struct ContinueWatchingCell: View {
                         .foregroundColor(.secondary)
                     
                     Text(item.mediaTitle)
-                        .font(.caption)
+                        .font(.subheadline)
                         .lineLimit(2)
                         .foregroundColor(.primary)
                         .multilineTextAlignment(.leading)
                 }
+                #if os(tvOS)
+                .padding(.bottom)
+                #endif
             }
+            #if os(tvOS)
+            .frame(width: 340, height: 340)
+            #else
             .frame(width: 240, height: 170)
+            #endif
         }
         .contextMenu {
             Button(action: { markAsWatched() }) {

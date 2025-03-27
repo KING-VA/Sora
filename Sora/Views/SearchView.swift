@@ -29,7 +29,11 @@ struct SearchView: View {
     @State private var isSearching = false
     @State private var searchText = ""
     @State private var hasNoResults = false
+    #if !os(tvOS)
     @State private var isLandscape: Bool = UIDevice.current.orientation.isLandscape
+    #else
+    @State private var isLandscape: Bool = true
+    #endif
     @State private var isModuleSelectorPresented = false
     
     private var selectedModule: ScrapingModule? {
@@ -46,12 +50,16 @@ struct SearchView: View {
     ]
     
     private var columnsCount: Int {
+        #if os(tvOS)
+        return mediaColumnsLandscape
+        #else
         if UIDevice.current.userInterfaceIdiom == .pad {
             let isLandscape = UIScreen.main.bounds.width > UIScreen.main.bounds.height
             return isLandscape ? mediaColumnsLandscape : mediaColumnsPortrait
         } else {
             return verticalSizeClass == .compact ? mediaColumnsLandscape : mediaColumnsPortrait
         }
+        #endif
     }
     
     private var cellWidth: CGFloat {
@@ -62,7 +70,11 @@ struct SearchView: View {
         let safeWidth = UIScreen.main.bounds.width - safeAreaInsets.left - safeAreaInsets.right
         let totalSpacing: CGFloat = 16 * CGFloat(columnsCount + 1)
         let availableWidth = safeWidth - totalSpacing
+        #if os(tvOS)
+        return (availableWidth / CGFloat(columnsCount)) * 0.5
+        #else
         return availableWidth / CGFloat(columnsCount)
+        #endif
     }
     
     var body: some View {
@@ -85,6 +97,43 @@ struct SearchView: View {
                             .padding(.trailing)
                             .padding(.top)
                         }
+                        #if os(tvOS)
+                        Menu {
+                            ForEach(moduleManager.modules, id: \.id) { module in
+                                Button {
+                                    selectedModuleId = module.id.uuidString
+                                } label: {
+                                    HStack {
+                                        KFImage(URL(string: module.metadata.iconUrl))
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(width: 20, height: 20)
+                                            .cornerRadius(4)
+                                        Text(module.metadata.sourceName)
+                                        if module.id.uuidString == selectedModuleId {
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(.accentColor)
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                if let selectedModule = selectedModule {
+                                    Text(selectedModule.metadata.sourceName)
+                                        .font(.headline)
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text("Select Module")
+                                        .font(.headline)
+                                        .foregroundColor(.accentColor)
+                                }
+                                Image(systemName: "chevron.down")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .fixedSize()
+                        #endif
                     }
                     
                     if selectedModule == nil {
@@ -100,7 +149,9 @@ struct SearchView: View {
                         }
                         .padding()
                         .frame(maxWidth: .infinity)
+                        #if !os(tvOS)
                         .background(Color(.systemBackground))
+                        #endif
                         .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
                     }
                     
@@ -146,13 +197,19 @@ struct SearchView: View {
                                                 .lineLimit(1)
                                         }
                                     }
+                                    #if os(tvOS)
+                                    // Set clear background for tvOS
+                                    .background(Color.clear)
+                                    #endif
                                 }
+                                #if !os(tvOS)
                                 .onAppear {
                                     updateOrientation()
                                 }
                                 .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
                                     updateOrientation()
                                 }
+                                #endif
                             }
                             .padding(.top)
                             .padding()
@@ -160,6 +217,7 @@ struct SearchView: View {
                     }
                 }
             }
+            #if !os(tvOS)
             .navigationTitle("Search")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -201,6 +259,7 @@ struct SearchView: View {
                     .fixedSize()
                 }
             }
+            #endif
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onChange(of: selectedModuleId) { _ in
@@ -249,25 +308,31 @@ struct SearchView: View {
                     }
                 } catch {
                     Logger.shared.log("Error loading module: \(error)", type: "Error")
+                    moduleManager.loadModules()
                     isSearching = false
                     hasNoResults = true
                 }
             }
         }
     }
-    
+#if !os(tvOS)
     private func updateOrientation() {
         DispatchQueue.main.async {
             isLandscape = UIDevice.current.orientation.isLandscape
         }
     }
+#endif
     
     private func determineColumns() -> Int {
+        #if os(tvOS)
+        return mediaColumnsLandscape
+        #else
         if UIDevice.current.userInterfaceIdiom == .pad {
             return isLandscape ? mediaColumnsLandscape : mediaColumnsPortrait
         } else {
             return verticalSizeClass == .compact ? mediaColumnsLandscape : mediaColumnsPortrait
         }
+        #endif
     }
 }
 
@@ -279,9 +344,11 @@ struct SearchBar: View {
         HStack {
             TextField("Search...", text: $text, onCommit: onSearchButtonClicked)
                 .padding(7)
-                .padding(.horizontal, 25)
-                .background(Color(.systemGray6))
+                .padding(.horizontal, 50)
+                .padding(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
                 .cornerRadius(8)
+                #if !os(tvOS)
+                .background(Color(.systemGray6))
                 .overlay(
                     HStack {
                         Image(systemName: "magnifyingglass")
@@ -300,6 +367,7 @@ struct SearchBar: View {
                         }
                     }
                 )
+                #endif
         }
     }
 }

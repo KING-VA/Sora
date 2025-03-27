@@ -37,68 +37,78 @@ struct SettingsViewModule: View {
                 }
                 else {
                     ForEach(moduleManager.modules) { module in
-                        HStack {
-                            KFImage(URL(string: module.metadata.iconUrl))
-                                .resizable()
-                                .frame(width: 50, height: 50)
-                                .clipShape(Circle())
-                                .padding(.trailing, 10)
-                            
-                            VStack(alignment: .leading) {
-                                HStack(alignment: .bottom, spacing: 4) {
-                                    Text(module.metadata.sourceName)
-                                        .font(.headline)
-                                        .foregroundColor(.primary)
-                                    Text("v\(module.metadata.version)")
+                        Button {
+                            selectedModuleId = module.id.uuidString
+                        } label: {
+                            HStack {
+                                KFImage(URL(string: module.metadata.iconUrl))
+                                    .resizable()
+                                    .frame(width: 50, height: 50)
+                                    .clipShape(Circle())
+                                    .padding(.trailing, 10)
+                                
+                                VStack(alignment: .leading) {
+                                    HStack(alignment: .bottom, spacing: 4) {
+                                        Text(module.metadata.sourceName)
+                                            .font(.headline)
+                                            .foregroundColor(.primary)
+                                        Text("v\(module.metadata.version)")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Text("Author: \(module.metadata.author.name)")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Text("Language: \(module.metadata.language)")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
-                                Text("Author: \(module.metadata.author.name)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                Text("Language: \(module.metadata.language)")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            if module.id.uuidString == selectedModuleId {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.accentColor)
-                                    .frame(width: 25, height: 25)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectedModuleId = module.id.uuidString
-                        }
-                        .contextMenu {
-                            Button(action: {
-                                UIPasteboard.general.string = module.metadataUrl
-                                DropManager.shared.showDrop(title: "Copied to Clipboard", subtitle: "", duration: 1.0, icon: UIImage(systemName: "doc.on.clipboard.fill"))
-                            }) {
-                                Label("Copy URL", systemImage: "doc.on.doc")
-                            }
-                            Button(role: .destructive) {
-                                if selectedModuleId != module.id.uuidString {
-                                    moduleManager.deleteModule(module)
-                                    DropManager.shared.showDrop(title: "Module Removed", subtitle: "", duration: 1.0, icon: UIImage(systemName: "trash"))
+                                
+                                Spacer()
+                                
+                                if module.id.uuidString == selectedModuleId {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 25, height: 25)
                                 }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
                             }
-                            .disabled(selectedModuleId == module.id.uuidString)
-                        }
-                        .swipeActions {
-                            if selectedModuleId != module.id.uuidString {
+                            .contentShape(Rectangle())
+                            //                        Make the module focusable
+                            .focusable()
+                            .onTapGesture {
+                                selectedModuleId = module.id.uuidString
+                            }
+                            .contextMenu {
+#if !os(tvOS)
+                                Button(action: {
+                                    UIPasteboard.general.string = module.metadataUrl
+                                    DropManager.shared.showDrop(title: "Copied to Clipboard", subtitle: "", duration: 1.0, icon: UIImage(systemName: "doc.on.clipboard.fill"))
+                                }) {
+                                    Label("Copy URL", systemImage: "doc.on.doc")
+                                }
+#endif
                                 Button(role: .destructive) {
-                                    moduleManager.deleteModule(module)
-                                    DropManager.shared.showDrop(title: "Module Removed", subtitle: "", duration: 1.0, icon: UIImage(systemName: "trash"))
+                                    if selectedModuleId != module.id.uuidString {
+                                        moduleManager.deleteModule(module)
+                                        DropManager.shared.showDrop(title: "Module Removed", subtitle: "", duration: 1.0, icon: UIImage(systemName: "trash"))
+                                    }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .disabled(selectedModuleId == module.id.uuidString)
                             }
+#if !os(tvOS)
+                            .swipeActions {
+                                if selectedModuleId != module.id.uuidString {
+                                    Button(role: .destructive) {
+                                        moduleManager.deleteModule(module)
+                                        DropManager.shared.showDrop(title: "Module Removed", subtitle: "", duration: 1.0, icon: UIImage(systemName: "trash"))
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+#endif
                         }
                     }
                 }
@@ -120,6 +130,12 @@ struct SettingsViewModule: View {
         .onAppear {
             Task {
                 await moduleManager.refreshModules()
+#if os(tvOS)
+                //                If on tvOS and modules are not empty and selectedmodule is not empy, automatically add the first to selected modules
+                if !moduleManager.modules.isEmpty && selectedModuleId == nil {
+                    selectedModuleId = moduleManager.modules.first?.id.uuidString
+                }
+#endif
             }
         }
         .alert(isPresented: .constant(errorMessage != nil)) {
@@ -155,11 +171,11 @@ struct SettingsViewModule: View {
         DispatchQueue.main.async {
             let addModuleView = ModuleAdditionSettingsView(moduleUrl: url).environmentObject(moduleManager)
             let hostingController = UIHostingController(rootView: addModuleView)
-             
-             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                let window = windowScene.windows.first {
-                 window.rootViewController?.present(hostingController, animated: true, completion: nil)
-             }
+            
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first {
+                window.rootViewController?.present(hostingController, animated: true, completion: nil)
+            }
         }
     }
 }

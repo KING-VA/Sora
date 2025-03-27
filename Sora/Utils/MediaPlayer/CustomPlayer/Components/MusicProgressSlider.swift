@@ -22,6 +22,7 @@ struct MusicProgressSlider<T: BinaryFloatingPoint>: View {
     @State private var localRealProgress: T = 0
     @State private var localTempProgress: T = 0
     @GestureState private var isActive: Bool = false
+//    @AccessibilityFocusState private var isFocused: Bool
     
     var body: some View {
         GeometryReader { bounds in
@@ -48,7 +49,7 @@ struct MusicProgressSlider<T: BinaryFloatingPoint>: View {
                         Spacer(minLength: 0)
                         Text("-" + (inRange.upperBound - value).asTimeString(style: .positional, showHours: shouldShowHours))
                     }
-
+                    
                     .font(.system(size: 12))
                     .foregroundColor(isActive ? fillColor : emptyColor)
                 }
@@ -57,17 +58,29 @@ struct MusicProgressSlider<T: BinaryFloatingPoint>: View {
             }
             .frame(width: bounds.size.width, height: bounds.size.height, alignment: .center)
             .contentShape(Rectangle())
+#if !os(tvOS)
             .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                        .updating($isActive) { _, state, _ in
-                state = true
-            }
-                        .onChanged { gesture in
-                localTempProgress = T(gesture.translation.width / bounds.size.width)
-                value = max(min(getPrgValue(), inRange.upperBound), inRange.lowerBound)
-            }.onEnded { _ in
-                localRealProgress = max(min(localRealProgress + localTempProgress, 1), 0)
-                localTempProgress = 0
-            })
+                .updating($isActive) { _, state, _ in
+                    state = true
+                }
+                .onChanged { gesture in
+                    localTempProgress = T(gesture.translation.width / bounds.size.width)
+                    value = max(min(getPrgValue(), inRange.upperBound), inRange.lowerBound)
+                }.onEnded { _ in
+                    localRealProgress = max(min(localRealProgress + localTempProgress, 1), 0)
+                    localTempProgress = 0
+                })
+//#else
+//            .focusable()
+//            .accessibilityFocused($isFocused)
+//            // Handle the button and swipe gestures on the remote to change the value
+//            .onChange(of: isFocused) { focused in
+//                if focused {
+//                    Logger.shared.log("Focused on the slider")
+//                }
+//            }
+            
+#endif
             .onChange(of: isActive) { newValue in
                 value = max(min(getPrgValue(), inRange.upperBound), inRange.lowerBound)
                 onEditingChanged(newValue)
@@ -82,6 +95,7 @@ struct MusicProgressSlider<T: BinaryFloatingPoint>: View {
             }
         }
         .frame(height: isActive ? height * 1.25 : height, alignment: .center)
+//        .frame(height: isFocused ? height * 1.25 : height, alignment: .center)
     }
     
     private var animation: Animation {
@@ -102,4 +116,16 @@ struct MusicProgressSlider<T: BinaryFloatingPoint>: View {
     private func getPrgValue() -> T {
         return ((localRealProgress + localTempProgress) * (inRange.upperBound - inRange.lowerBound)) + inRange.lowerBound
     }
+    
+//    @objc private func swipeAction(_ gesture: UISwipeGestureRecognizer) {
+//        if gesture.direction == .right {
+//            // Increment the value on a right swipe
+//            localRealProgress = min(localRealProgress + 0.05, 1.0)
+//        } else if gesture.direction == .left {
+//            // Decrement the value on a left swipe
+//            localRealProgress = max(localRealProgress - 0.05, 0.0)
+//        }
+//        // Update the binding value accordingly
+//        value = getPrgValue()
+//    }
 }

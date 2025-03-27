@@ -88,7 +88,9 @@ struct SettingsView: View {
                 }
                 Section(footer: Text("Running Sora 0.2.1 - cranci1")) {}
             }
+            #if !os(tvOS)
             .navigationTitle("Settings")
+            #endif
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
